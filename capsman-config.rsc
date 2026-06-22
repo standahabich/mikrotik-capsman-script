@@ -7,6 +7,8 @@
 
 :local datapathBridge "bridge1";
 
+:local scriptVersion "3.03";
+
 :local wifiBand {
  "2"={
   "extended-ssid"=""
@@ -15,9 +17,11 @@
   "channel.widthV3"=""
   "channel.widthV2"=""
   "channel.frequencyV3"="2412-2462:25"
+  "channel.frequencyV3ac"="2412-2462:25"
   "channel.frequencyV2"="2412,2437,2462"
   "countryV2"="united states3"
-  "countryV3"="United States"
+  "countryV3"="Superchannel"
+  "countryV3ac"="United States"
  };
  "5"={
   "extended-ssid"=""
@@ -25,16 +29,17 @@
   "channel.bandV2"=""
   "channel.widthV3"=""
   "channel.widthV2"=""
-  "channel.frequencyV3"="5180-5240:20, 5745-5805:20"
+  "channel.frequencyV3"="5180-5320:20"
+  "channel.frequencyV3ac"="5180-5240:20"
   "channel.frequencyV2"="5180,5200,5220,5240,5260,5280,5300,5320"
   "countryV2"="united states3"
-  "countryV3"="United States"
+  "countryV3"="Superchannel"
+  "countryV3ac"="United States"
  }
 };
 
-:local scriptVersion "3.01";
 
-### CAPsMAN V2+V3, RouterOS 7.14+ ###
+### CAPsMAN V2+V3, RouterOS 7.19+ ###
 ### Stanislav Habich              ###
 ### stanislavhabich@gmail.com     ###
 
@@ -69,19 +74,21 @@
 # channel.widthV3 ( /interface wifi configuration add channel.width= ; Default: "" ): sirka kanalu, default je maximalni sirka
 # channel.widthV2 ( /caps-man configuration add channel.extension-channel= ; Default: "" ): sirka kanalu, default je maximalni sirka
 # channel.frequency: Rozsah pro automatickou volbu kanalu
+# s priponou ac je kofigurace pro zarizeni s qcom-ac a je odstranena konfigurace vlan a nepodporujici superchannel
 
 # datapathBridge - do jakeho bridge pridat wifi interface, typicky to je bridge1. Neplati pro mode S
 
 ### predpoklada se, ze ###
-# pro mode S a S2: existuje na zarizeni DHCP server
-# pro mode S2: existuji lokalni wifi interface ktere lze zaradit do capsman
-# pro mode C a C2: existuje v siti dalsi zarizeni v mode S nebo S2
+# pro mode S: existuje na zarizeni DHCP server
+# pro mode S2: existuji lokalni wifi interface ktery lze zaradit do capsman
+# pro mode C: existuje v siti dalsi zarizeni v mode S
+# pro mode C2: existuje v siti dalsi zarizeni v mode S2
 # pro mode S2, C a C2: existuje interface zvoleny v "datapathBridge"
 
 # -------------------------------------------------------------------------------------------------------------------------- #
 
 ### servisni SSID: zakomentuj pro vypnuti, jinak nahradi ssid s cislem 8 ###
-#:set wifiSetting ($wifiSetting, { 8={ ssid="servis"; pass="servisservis"; wpa=; hide=1; vlan=; "client-isolation"= } } );
+#:set wifiSetting ($wifiSetting, { 8={ ssid="Servis"; pass="servisservis"; wpa=; hide=1; vlan=; "client-isolation"= } } );
 
 # -------------------------------------------------------------------------------------------------------------------------- #
 
@@ -137,40 +144,53 @@
    :if ( $mode = "S" or $mode = "S2" or $kS = 8 ) do={
     :local nameConfiguration ($kS."-".$kB."g");
     :local wifiV3 ("/interface wifi configuration add disabled=no datapath=capdp");
+    :local wifiV3ac ("/interface wifi configuration add disabled=no datapath=capdp");
     :local wifiV2 ("/caps-man configuration add");
     :local wifiExtV3 [:toarray ""];
+    :local wifiExtV3ac [:toarray ""];
     :local wifiExtV2 [:toarray ""];
 
     :set ($wifiExtV3->"name")                           $nameConfiguration;
+    :set ($wifiExtV3ac->"name")                         ($nameConfiguration."-ac");
     :set ($wifiExtV2->"name")                           $nameConfiguration;
 
     :set ($wifiExtV3->"ssid")                           ( "\"".$vS->"ssid".$vB->"extended-ssid"."\"" );
+    :set ($wifiExtV3ac->"ssid")                           ( "\"".$vS->"ssid".$vB->"extended-ssid"."\"" );
     :set ($wifiExtV2->"ssid")                           ( "\"".$vS->"ssid".$vB->"extended-ssid"."\"" );
 
     :set ($wifiExtV3->"country")                        ( "\"".$vB->"countryV3"."\"" );
+    :set ($wifiExtV3ac->"country")                      ( "\"".$vB->"countryV3ac"."\"" );
     :set ($wifiExtV2->"country")                        ( "\"".$vB->"countryV2"."\"" );
 
     :set ($wifiExtV3->"channel.frequency")              ( "\"".$vB->"channel.frequencyV3"."\"" );
+    :set ($wifiExtV3ac->"channel.frequency")            ( "\"".$vB->"channel.frequencyV3ac"."\"" );
     :set ($wifiExtV2->"channel.frequency")              ( "\"".$vB->"channel.frequencyV2"."\"" );
 
     :if ( [:len ($vB->"channel.bandV3")] > 0 )   do={ :set ($wifiExtV3->"channel.band") ($vB->"channel.bandV3"); };
+    :if ( [:len ($vB->"channel.bandV3")] > 0 )   do={ :set ($wifiExtV3ac->"channel.band") ($vB->"channel.bandV3"); };
     :if ( [:len ($vB->"channel.bandV2")] > 0 )   do={ :set ($wifiExtV2->"channel.band") ($vB->"channel.bandV2"); };
 
     :if ( [:len ($vB->"channel.widthV3")] > 0 )  do={ :set ($wifiExtV3->"channel.width") ($vB->"channel.widthV3"); };
+    :if ( [:len ($vB->"channel.widthV3")] > 0 )  do={ :set ($wifiExtV3ac->"channel.width") ($vB->"channel.widthV3"); };
     :if ( [:len ($vB->"channel.widthV2")] > 0 )  do={ :set ($wifiExtV2->"channel.extension-channel") ($vB->"channel.widthV2"); };
 
     :if ( [:len ($vS->"pass")] >= 8 ) do={
      :set ($wifiExtV3->"security.passphrase")           ( "\"".$vS->"pass"."\"" );
+     :set ($wifiExtV3ac->"security.passphrase")           ( "\"".$vS->"pass"."\"" );
      :set ($wifiExtV2->"security.passphrase")           ( "\"".$vS->"pass"."\"" );
 
      :set ($wifiExtV3->"security.authentication-types") "wpa2-psk";
+     :set ($wifiExtV3ac->"security.authentication-types") "wpa2-psk";
      :set ($wifiExtV2->"security.authentication-types") "wpa2-psk";
      :if ( ($vS->"wpa") = 23 ) do={ :set ($wifiExtV3->"security.authentication-types") "wpa2-psk,wpa3-psk" };
      :if ( ($vS->"wpa") = 3 ) do={ :set ($wifiExtV3->"security.authentication-types") "wpa3-psk" };
+     :if ( ($vS->"wpa") = 23 ) do={ :set ($wifiExtV3ac->"security.authentication-types") "wpa2-psk,wpa3-psk" };
+     :if ( ($vS->"wpa") = 3 ) do={ :set ($wifiExtV3ac->"security.authentication-types") "wpa3-psk" };
     };
 
     :if ( ($wifiExtV3->"security.authentication-types") = "wpa2-psk" ) do={
      :set ($wifiExtV3->"security.management-protection") "disabled";
+     :set ($wifiExtV3ac->"security.management-protection") "disabled";
     }
 
     :if ( ($vS->"vlan") > 1 && ($vS->"vlan") < 4096 ) do={
@@ -181,31 +201,39 @@
 
     :if ( ($vS->"hide") = 1 ) do={
      :set ($wifiExtV3->"hide-ssid") "yes";
+     :set ($wifiExtV3ac->"hide-ssid") "yes";
      :set ($wifiExtV2->"hide-ssid") "yes";
     };
 
     :if ( ($vS->"client-isolation") = 1 ) do={
      :set ($wifiExtV3->"datapath.client-isolation") "yes";
+     :set ($wifiExtV3ac->"datapath.client-isolation") "yes";
     } else={
      :set ($wifiExtV2->"datapath.client-to-client-forwarding") "yes";
     };
 
     :if ( ($vS->"wps") != 1 ) do={
      :set ($wifiExtV3->"security.wps") "disable";
+     :set ($wifiExtV3ac->"security.wps") "disable";
     };
 
     :set ($wifiExtV3->"security.ft")                    "yes";
     :set ($wifiExtV3->"security.ft-over-ds")            "yes";
     :set ($wifiExtV3->"multicast-enhance")              "enabled";
+    :set ($wifiExtV3ac->"security.ft")                    "yes";
+    :set ($wifiExtV3ac->"security.ft-over-ds")            "yes";
+    :set ($wifiExtV3ac->"multicast-enhance")              "enabled";
 
     :set ($wifiExtV2->"datapath.local-forwarding")      "yes";
     :set ($wifiExtV2->"security.encryption")            "aes-ccm";
     :set ($wifiExtV2->"security.group-key-update")      "24h";
 
     :foreach kE,vE in=$wifiExtV3 do={ :set wifiV3 ($wifiV3." ".$kE."=".$vE); };
+    :foreach kE,vE in=$wifiExtV3ac do={ :set wifiV3ac ($wifiV3ac." ".$kE."=".$vE); };
     :foreach kE,vE in=$wifiExtV2 do={ :set wifiV2 ($wifiV2." ".$kE."=".$vE); };
 
     :do { [:parse $wifiV3] } on-error={ };
+    :do { [:parse $wifiV3ac] } on-error={ };
     :do { [:parse $wifiV2] } on-error={ };
    }
   }
@@ -217,8 +245,11 @@
  :foreach kB,vB in=$wifiBand do={
   :local masterConfiguration "";
   :local slaveConfiguration "";
-  :local wifiDefV3 ("/interface wifi provisioning add action=create-dynamic-enabled disabled=no supported-bands=\"".($kB."ghz-n")."\" name-format=\"c$kB-%I-%C\"");
-  :local wifiDefV2 ("/caps-man provisioning add action=create-dynamic-enabled disabled=no name-format=prefix-identity name-prefix=c".$kB);
+  :local masterConfigurationAC "";
+  :local slaveConfigurationAC "";
+  :local wifiDefV3   ("/interface wifi provisioning add action=create-dynamic-enabled disabled=no comment=\"for AX\" supported-bands=\"".$kB."ghz-ax\" name-format=\"c".$kB."ax.%R.%I\" slave-name-format=\"%m.v\"");
+  :local wifiDefV3ac ("/interface wifi provisioning add action=create-dynamic-enabled disabled=no comment=\"for AC\" supported-bands=\"".$kB."ghz-n\" name-format=\"c".$kB."ac.%R.%I\" slave-name-format=\"%m.v\"");
+  :local wifiDefV2   ("/caps-man provisioning add action=create-dynamic-enabled disabled=no name-format=prefix-identity name-prefix=c".$kB);
   :if ( $kB = 2 ) do={
    :set wifiDefV2 ($wifiDefV2." hw-supported-modes=b,g,gn");
   } else={
@@ -227,18 +258,23 @@
   :foreach kS,vS in=$wifiSetting do={
    :if ( $kS = 1 ) do={
     :set masterConfiguration ("master-configuration=".$kS."-".$kB."g");
+    :set masterConfigurationAC ("master-configuration=".$kS."-".$kB."g-ac");
    } else {
     :if ( [:len $slaveConfiguration] > 0 ) do={
       :set slaveConfiguration ($slaveConfiguration.",".$kS."-".$kB."g");
+      :set slaveConfigurationAC ($slaveConfigurationAC.",".$kS."-".$kB."g-ac");
      } else={
       :set slaveConfiguration ("slave-configurations=".$kS."-".$kB."g");
+      :set slaveConfigurationAC ("slave-configurations=".$kS."-".$kB."g-ac");
      }
    }
   }
   :set wifiDefV3 ($wifiDefV3." ".$masterConfiguration." ".$slaveConfiguration);
+  :set wifiDefV3ac ($wifiDefV3ac." ".$masterConfigurationAC." ".$slaveConfigurationAC);
   :set wifiDefV2 ($wifiDefV2." ".$masterConfiguration." ".$slaveConfiguration);
 
   :do { [:parse $wifiDefV3] } on-error={ };
+  :do { [:parse $wifiDefV3ac] } on-error={ };
   :do { [:parse $wifiDefV2] } on-error={ };
  }
 };
@@ -256,27 +292,49 @@
   :return [:serialize to=json \$ifaceMap]; \
  ");
 
+ :local replaceCharacterFunc do={
+  :local a [tostr $1];
+  :local b $char;
+  :if ([typeof $b]="nil") do={:set b "-"}
+  :while ([find $a $b]) do={
+   :set $a ("$[:pick $a 0 ([find $a $b]) ]"."$[:pick $a ([find $a $b]+1) ([:len $a])]")};
+  :return $a;
+ }
+
  :local ifaceMap [:toarray ""];
  :do { :set ifaceMap [:deserialize from=json [[:parse $wifiDef]]] } on-error={ };
 
  :foreach kM,vM in=$ifaceMap do={
   :local ifaceMaster 1;
+  :local prefixConfiguration "";
+  :local prefixInterface "";
+  :local nameMac [$replaceCharacterFunc [/interface wifi get $vM mac-address] char=":"];
+  :if ( [:len [/interface/wifi/radio/get [find interface=$vM] max-vlans]] = 0 ) do={
+   :set prefixConfiguration "-ac";
+   :set prefixInterface "ac";
+  }
   :foreach kS,vS in=$wifiSetting do={
    :if ( $mode = "S2" or $kS = 8 ) do={
-    :local nameConfiguration ($kS."-".$kM."g");
-    :local nameInterface ("c".$kM."-local-".$kS);
+    :local nameConfiguration ($kS."-".$kM."g".$prefixConfiguration);
+    :local nameInterface ("c".$kM.$prefixInterface.".local.".$nameMac);
+    :local nameInterfaceSlave "";
+    :if ( $ifaceMaster > 2 ) do={
+     :set nameInterfaceSlave ($nameInterface.".v".($ifaceMaster-1));
+    } else={
+     :set nameInterfaceSlave ($nameInterface.".v");
+    }
     :local manager "local";
     :if ( $mode != "S2" ) do={ :set manager "capsman-or-local"; }
     :if ( $ifaceMaster = 1 ) do={
      :do { [:parse "/interface wifi set [find default-name=\"$vM\"] configuration=\"$nameConfiguration\" configuration.manager=$manager configuration.mode=ap disabled=no name=\"$nameInterface\";"] } on-error={ };
     } else={
-     :do { [:parse "/interface wifi add configuration=\"$nameConfiguration\" configuration.mode=ap disabled=no master-interface=[find default-name=\"$vM\"] name=\"$nameInterface\";"] } on-error={ };
+     :do { [:parse "/interface wifi add configuration=\"$nameConfiguration\" configuration.mode=ap disabled=no master-interface=[find default-name=\"$vM\"] name=\"$nameInterfaceSlave\";"] } on-error={ };
     }
     :set ifaceMaster ($ifaceMaster + 1);
    }
   }
   :if ( $ifaceMaster = 1 ) do={
-    :do { [:parse "/interface/wifi/set [find default-name=\"$vM\"] configuration.manager=capsman configuration.mode=ap datapath=capdp;"] } on-error={ };
+   :do { [:parse "/interface/wifi/set [find default-name=\"$vM\"] configuration.manager=capsman configuration.mode=ap datapath=capdp;"] } on-error={ };
   }
  }
 };
